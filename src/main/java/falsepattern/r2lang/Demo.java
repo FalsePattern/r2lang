@@ -11,6 +11,10 @@ import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 public class Demo {
   public static void main(String[] args) {
     if (args.length == 0) {
@@ -21,9 +25,13 @@ public class Demo {
     if (args.length == 2) {
       passes = Integer.parseInt(args[1]);
     }
-    String text = args[0];
-    var parseLog = optimizeCode(text, passes);
-    System.out.println(parseLog);
+    String filePath = args[0];
+    try {
+      var parseLog = optimizeCode(Files.readString(Path.of(filePath)), passes);
+      System.out.println(parseLog);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private static String optimizeCode(String code, int passes) {
