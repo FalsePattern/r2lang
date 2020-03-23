@@ -1,29 +1,82 @@
 package falsepattern.r2lang;
 
-import java.math.BigInteger;
+import static falsepattern.r2lang.util.ReflectionHelper.getOpText;
+
+import falsepattern.r2lang.R2Lang.ExprContext;
+import falsepattern.r2lang.R2Lang.IdentifierContext;
+import falsepattern.r2lang.R2Lang.IntegerConstantContext;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
+import org.antlr.v4.runtime.tree.TerminalNode;
 
 public class Demo {
   public static void main(String[] args) {
-    String text = "int demo(int a, int b) {\n"
-        + "int c;\n"
-        + "c = 1 + 2 + 3 + a + b;\n"
-        + "c += 1 << 12;\n"
-        + "return c;\n}";
-    var lexer = new R2LangLexer(CharStreams.fromString(text));
+    if (args.length == 0) {
+      System.out.println("Accepted parameters: <source file path> [optimization passes]");
+      System.exit(0);
+    }
+    int passes = 0;
+    if (args.length == 2) {
+      passes = Integer.parseInt(args[1]);
+    }
+    String text = args[0];
+    var parseLog = optimizeCode(text, passes);
+    System.out.println(parseLog);
+  }
+
+  private static String optimizeCode(String code, int passes) {
+
+    var lexer = new R2LangLexer(CharStreams.fromString(code));
     var tokenStream = new CommonTokenStream(lexer);
-    var parser = new R2LangParser(tokenStream);
-    var translator = new R2LangToR2Inter();
-    ParseTreeWalker.DEFAULT.walk(translator, parser.program());
-    var code = translator.toString();
-    System.out.println(code);
-    int prevLength;
-    do {
-      prevLength = code.length();
-      code = R2InterOptimizer.optimizeIntMath(code, BigInteger.valueOf(65536));
-    } while (code.length() < prevLength);
-    System.out.println(code);
+    var parser = new R2Lang(tokenStream);
+    var analyzer = new Analyzer();
+    var optimizer = new Optimizer();
+    optimizer.a = analyzer;
+    var program = parser.program();
+    StringBuilder result = new StringBuilder("Unoptimized:\n" + stringifyRule(program, " "));
+    for (int i = 0; i < passes - 1; i++) {
+      analyzer.init();
+      ParseTreeWalker.DEFAULT.walk(optimizer, program);
+      result.append("\n\nPass").append(i).append(":\n").append(stringifyRule(program, " "));
+    }
+    return result.toString();
+  }
+
+  private static String stringifyRule(ParserRuleContext ctx, String indent) {
+    var result = new StringBuilder();
+    var ind = indent + " ";
+    result.append(ctx.getClass().getSimpleName());
+    if (ctx instanceof ExprContext) {
+      try {
+        result.append(getOpText((ExprContext) ctx));
+      } catch (IllegalAccessException | NoSuchFieldException ignored) {
+
+      }
+    }
+    result.append('\n');
+    ctx.children.stream().filter((tree) -> !(tree instanceof TerminalNode)).map((child) -> {
+      if (child instanceof IntegerConstantContext) {
+        return "INTEGER " + child.getText();
+      } else if (child instanceof IdentifierContext) {
+        return "IDENT " + child.getText();
+      } else if (child instanceof R2Lang.FunctionContext) {
+        var fun = (R2Lang.FunctionContext)child;
+        var builder = new StringBuilder();
+        builder.append("FUNCTION ").append(fun.Identifier(0)).append("; ARGS: ");
+        var args = fun.Identifier().size() - 1;
+        for (int i = 0; i < args; i++) {
+          builder.append(fun.Identifier(i + 1)).append(" ");
+        }
+        return builder.append('\n').append(ind).append(" ").append(stringifyRule(fun.statement(), ind + " ")).toString();
+      } else if (child instanceof ParserRuleContext) {
+        return stringifyRule((ParserRuleContext) child, ind);
+      } else {
+        return child.getText();
+      }
+    }).forEach((rule -> result.append(ind).append(rule).append('\n')));
+    result.deleteCharAt(result.length() - 1);
+    return result.toString();
   }
 }

@@ -1,110 +1,44 @@
-grammar R2Lang;
+parser grammar R2Lang;
+
+options {tokenVocab=R2LangLexer;}
+
 program: function*;
 
-function: typeDeclaration IDENTIFIER functionParams block;
+function: Fun Identifier OpenP (Identifier (Comma Identifier)*)? CloseP statement;
 
-functionParams: '(' (variableDeclaration (',' variableDeclaration)*)? ')';
-
-block: '{' rootStatement* '}';
-
-rootStatement: ((statement) ';') | (block ';'?);
-
-statement:expressionStatement | variableDeclaration | jumpStatement;
-
-jumpStatement: returnStatement;
-
-returnStatement: 'return' expression;
-
-expressionStatement: expression;
-
-expression: assignmentExpression;
-
-assignmentExpression
-: logicalOrExpression
-| IDENTIFIER ASSIGNMENTOPERATOR assignmentExpression
+statement
+: OpenB statement* CloseB # compoundStatement
+| If OpenP expression CloseP statement (Else statement) # conditionalStatement
+| While OpenP expression CloseP statement # loopStatement
+| Return expression Semicolon # returnStatement
+| expression Semicolon # expressionStatement
+| Var Identifier (Comma Identifier)* (Equal expr)? Semicolon # declarationStatement
+| Semicolon # noopStatement
 ;
 
-ASSIGNMENTOPERATOR
-: '=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '&=' | '^=' | '|='
-| '&&=' | '^^=' | '||=';
+expression: expr;
 
-
-logicalOrExpression
-: logicalXorExpression
-| logicalOrExpression '||' logicalXorExpression
+expr
+: IntegerLiteral # integerConstant
+| StringLiteral # stringConstant
+| Identifier # identifier
+| OpenP expr CloseP # parentheses
+| expr op=OpenP (expr (Comma expr)*)? CloseP # functionCall
+| expr op=OpenBr expr CloseBr # indexing
+| expr op=(Increment | Decrement) # postIncrementDecrement
+| op=(Plus | Minus | Not | Increment | Decrement | And | Star) expr # unary
+| expr op=(Star | Slash | Percent) expr # multiplicative
+| expr op=(Plus | Minus) expr # additive
+| expr op=(ShiftLeft | ShiftRight) expr # shifting
+| expr op=(LessThan | LessOrEqual | GreaterThan | GreaterOrEqual) expr # comparative
+| expr op=(EqualCompare | NotEqualCompare) expr # equality
+| expr op=And expr # bitwiseAnd
+| expr op=Caret expr # bitwiseXor
+| expr op=Pipe expr # bitwiseOr
+| expr op=AndAnd expr # logicalAnd
+| expr op=PipePipe expr # logicalOr
+| <assoc=right> expr op=Question expr Colon expr # conditional
+| <assoc=right> expr op=(Equal | PlusEqual | MinusEqual | StarEqual | SlashEqual | PercentEqual
+           | ShiftRightEqual | ShiftLeftEqual | AndEqual | CaretEqual | PipeEqual) expr # assignment
+| expr op=Comma expr # comma
 ;
-logicalXorExpression
-: logicalAndExpression
-| logicalXorExpression '^^' logicalAndExpression
-;
-logicalAndExpression
-: inclusiveOrExpression
-| logicalAndExpression '&&' inclusiveOrExpression
-;
-inclusiveOrExpression
-: exclusiveOrExpression
-| inclusiveOrExpression '|' exclusiveOrExpression
-;
-exclusiveOrExpression
-: andExpression
-| exclusiveOrExpression '^' andExpression
-;
-andExpression
-: equalityExpression
-| andExpression '&' equalityExpression
-;
-equalityExpression
-: relationalExpression
-| equalityExpression '==' relationalExpression
-| equalityExpression '!=' relationalExpression
-;
-relationalExpression
-: shiftExpression
-| relationalExpression '<' shiftExpression
-| relationalExpression '>' shiftExpression
-| relationalExpression '<=' shiftExpression
-| relationalExpression '>=' shiftExpression
-;
-shiftExpression
-: additiveExpression
-| shiftExpression '<<' additiveExpression
-| shiftExpression '>>' additiveExpression
-;
-additiveExpression
-: multiplicativeExpression
-| additiveExpression '+' multiplicativeExpression
-| additiveExpression '-' multiplicativeExpression
-;
-multiplicativeExpression
-: unaryExpression
-| multiplicativeExpression '*' unaryExpression
-| multiplicativeExpression '/' unaryExpression
-| multiplicativeExpression '%' unaryExpression
-;
-unaryExpression
-: primaryExpression
-| unaryOperator unaryExpression
-;
-unaryOperator: '+' | '-' | '~' | '!';
-
-primaryExpression
-: IDENTIFIER
-| NUMBER
-| '(' expression ')'
-;
-
-variableDeclaration: typeDeclaration IDENTIFIER;
-typeDeclaration: 'int' | 'void';
-
-NUMBER: DIGIT+ | ('0x' DIGIT+);
-IDENTIFIER: LETTER WORDCHAR*;
-WHITESPACE: [ \r\n\t] -> skip;
-
-fragment LOWERCASE: [a-z];
-fragment UPPERCASE: [A-Z];
-fragment DIGIT: [0-9];
-fragment HEX: [a-fA-F];
-fragment LETTER: LOWERCASE | UPPERCASE;
-fragment ALPHANUM: LETTER | DIGIT;
-fragment WORDCHAR: ALPHANUM | '_';
-
